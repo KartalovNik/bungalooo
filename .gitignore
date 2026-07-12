@@ -1,0 +1,28 @@
+# Зависимости
+node_modules
+.pnp
+.pnp.js
+
+# Билд
+dist
+dist-ssr
+*.local
+
+# Тайни ключове и настройки на средата (НЕ се качват в Git)
+.env
+.env.local
+.env.*.local
+
+# Firebase
+.firebase
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Редактори / ОС
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db
+*.log
