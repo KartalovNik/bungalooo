@@ -7,6 +7,7 @@ import { store } from '../data/store'
 import { emptyBungalow, DEFAULT_STATUS } from '../config'
 import { SEED_BUNGALOWS } from '../seed'
 import { useAuth } from './AuthContext'
+import { useToast } from './ToastContext'
 
 const DataContext = createContext(null)
 const HISTORY_LIMIT = 60
@@ -20,6 +21,12 @@ export function DataProvider({ children }) {
   const [recentlyDeleted, setRecentlyDeleted] = useState([])
   const userRef = useRef(currentUser)
   userRef.current = currentUser
+  const toast = useToast()
+
+  // Незабавна (оптимистична) промяна в списъка, докато записът стигне до GitHub.
+  const optimistic = useCallback((id, patch) => {
+    setBungalows((prev) => prev.map((x) => (x.id === id ? { ...x, ...patch } : x)))
+  }, [])
 
   useEffect(() => {
     const unsub = store.subscribe(
@@ -79,28 +86,34 @@ export function DataProvider({ children }) {
       if (b.status === status) return
       const now = Date.now()
       const by = stampMeta()
+      const changed = by ? { ...by, at: now } : null
       const history = [...(b.statusHistory || []), { status, by, at: now }].slice(-HISTORY_LIMIT)
-      await store.update(b.id, {
-        status,
-        statusHistory: history,
-        updatedAt: now,
-        lastChangedBy: by ? { ...by, at: now } : null,
-      })
+      // Показваме промяната веднага (с автора), после записваме.
+      optimistic(b.id, { status, statusHistory: history, updatedAt: now, lastChangedBy: changed })
+      try {
+        await store.update(b.id, { status, statusHistory: history, updatedAt: now, lastChangedBy: changed })
+      } catch (e) {
+        optimistic(b.id, { status: b.status, statusHistory: b.statusHistory, lastChangedBy: b.lastChangedBy })
+        toast.error('Статусът не се запази: ' + (e.message || 'грешка при запис.'))
+      }
     },
-    [stampMeta]
+    [stampMeta, optimistic, toast]
   )
 
   const toggleFavorite = useCallback(
     async (b) => {
       const now = Date.now()
       const by = stampMeta()
-      await store.update(b.id, {
-        favorite: !b.favorite,
-        updatedAt: now,
-        lastChangedBy: by ? { ...by, at: now } : null,
-      })
+      const changed = by ? { ...by, at: now } : null
+      optimistic(b.id, { favorite: !b.favorite, updatedAt: now, lastChangedBy: changed })
+      try {
+        await store.update(b.id, { favorite: !b.favorite, updatedAt: now, lastChangedBy: changed })
+      } catch (e) {
+        optimistic(b.id, { favorite: b.favorite, lastChangedBy: b.lastChangedBy })
+        toast.error('Промяната не се запази: ' + (e.message || 'грешка.'))
+      }
     },
-    [stampMeta]
+    [stampMeta, optimistic, toast]
   )
 
   const saveNotes = useCallback(

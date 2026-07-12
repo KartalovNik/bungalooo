@@ -30,6 +30,10 @@ function BungalowCard({ bungalow: b }) {
   const cover = (b.photos || []).find(Boolean)
   const openDetails = () => navigate(`/b/${b.id}`)
 
+  // Кой последно е сменил статуса (от историята на статусите).
+  const lastStatus = b.statusHistory && b.statusHistory.length ? b.statusHistory[b.statusHistory.length - 1] : null
+  const statusBy = lastStatus && lastStatus.by ? { ...lastStatus.by, at: lastStatus.at } : null
+
   async function onShare(e) {
     e.stopPropagation()
     const res = await shareBungalow(b)
@@ -79,9 +83,14 @@ function BungalowCard({ bungalow: b }) {
       <div className="card__body">
         <div className="card__status-row">
           {editMode ? (
-            <StatusPicker statusKey={b.status} onChange={(s) => setStatus(b, s)} />
+            <StatusPicker statusKey={b.status} onChange={(s) => setStatus(b, s)} changedBy={statusBy} />
           ) : (
             <StatusBadge statusKey={b.status} />
+          )}
+          {statusBy && statusBy.name && (
+            <span className="status-by" title={`Статус сменен от ${statusBy.name}`}>
+              <UserAvatar user={statusBy} size={16} /> {statusBy.name}
+            </span>
           )}
         </div>
 

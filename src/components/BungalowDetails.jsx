@@ -145,7 +145,15 @@ export default function BungalowDetails() {
 
           <div className="detail__main">
             <div className="detail__statusrow">
-              {editMode ? <StatusPicker statusKey={b.status} onChange={(s) => setStatus(b, s)} /> : <StatusBadge statusKey={b.status} />}
+              {editMode ? (
+                <StatusPicker
+                  statusKey={b.status}
+                  onChange={(s) => setStatus(b, s)}
+                  changedBy={history[0] && history[0].by ? { ...history[0].by, at: history[0].at } : null}
+                />
+              ) : (
+                <StatusBadge statusKey={b.status} />
+              )}
               {b.favorite && <span className="fav-tag"><Icon name="heartFilled" size={14} /> Любимо</span>}
               {b.archived && <span className="chip chip--demo">Архивирано</span>}
             </div>

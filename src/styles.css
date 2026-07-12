@@ -251,7 +251,7 @@ button { font-family: inherit; cursor: pointer; }
 .heart--inline { position: static; width: 40px; height: 40px; background: var(--surface-2); box-shadow: none; }
 
 .card__body { padding: 12px 13px 13px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
-.card__status-row { display: flex; }
+.card__status-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .card__title { font-size: 1.08rem; letter-spacing: -0.01em; cursor: pointer; }
 .card__title:hover { color: var(--primary-dark); }
 .card__loc { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 0.88rem; }
@@ -294,6 +294,28 @@ button { font-family: inherit; cursor: pointer; }
 .status-badge__icon { font-size: 0.85em; }
 .status-picker-btn { cursor: pointer; transition: filter .15s; }
 .status-picker-btn:hover { filter: brightness(.97); }
+
+.status-by { display: inline-flex; align-items: center; gap: 5px; font-size: 0.78rem; color: var(--muted); font-weight: 600; }
+
+/* Избор на статус (изскачащ прозорец) */
+.status-grid { display: flex; flex-direction: column; gap: 8px; }
+.status-opt {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 13px 14px; border: 1.5px solid; border-radius: 12px;
+  font-size: 1rem; font-weight: 700; text-align: left; cursor: pointer;
+  transition: filter .12s, transform .05s;
+}
+.status-opt:hover { filter: brightness(.97); }
+.status-opt:active { transform: translateY(1px); }
+.status-opt--active { box-shadow: 0 0 0 2px #fff inset, 0 0 0 4px currentColor; }
+.status-opt__icon { font-size: 1em; }
+.status-opt__label { flex: 1; }
+.status-opt__check { margin-left: auto; }
+.status-changed-note {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border);
+  font-size: 0.85rem; color: var(--muted);
+}
 
 /* ── Удобства ───────────────────────────────────────────────── */
 .amenities { display: flex; flex-wrap: wrap; gap: 6px; }
