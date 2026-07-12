@@ -59,7 +59,7 @@ export default function LoginModal({ open, onClose }) {
         )}
         {!isCloud && (
           <p className="hint">
-            <Icon name="info" size={15} /> Демо режим (без облак): работи всяка непразна парола. За реална защита добавете Firebase ключове.
+            <Icon name="info" size={15} /> Демо режим (без облак): работи всяка непразна парола. За реална защита свържете базата.
           </p>
         )}
         <div className="modal__foot mt">

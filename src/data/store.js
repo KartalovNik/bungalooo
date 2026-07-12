@@ -1,19 +1,17 @@
 // ─────────────────────────────────────────────────────────────────
 // Слой за данните.
 // Има два адаптера зад един и същ интерфейс:
-//   • cloudStore — Firestore (синхронизация между устройства + офлайн)
+//   • cloudStore — Supabase (обща синхронизация между устройства)
 //   • localStore — localStorage (ДЕМО режим, само на това устройство)
-// Изборът е автоматичен според наличието на Firebase ключове.
+// Изборът е автоматичен според наличието на ключове за базата.
 // ─────────────────────────────────────────────────────────────────
-import { firebaseEnabled, db } from '../firebase'
+import { backendEnabled, supabase } from '../backend'
 
-const COLLECTION = 'bungalows'
+const TABLE = 'bungalows'
 
-// Премахва undefined (Firestore не ги приема) и прави чисто копие.
+// Прави чисто копие (без undefined стойности).
 function clean(obj) {
-  return JSON.parse(
-    JSON.stringify(obj, (_k, v) => (v === undefined ? null : v))
-  )
+  return JSON.parse(JSON.stringify(obj, (_k, v) => (v === undefined ? null : v)))
 }
 
 export function newId() {
@@ -21,89 +19,110 @@ export function newId() {
   return 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
-// ── Облачен адаптер (Firestore) ──────────────────────────────────
+// ── Облачен адаптер (Supabase) ───────────────────────────────────
 function makeCloudStore() {
-  let mod = null
-  const load = async () => {
-    if (!mod) mod = await import('firebase/firestore')
-    return mod
+  const CACHE_KEY = 'bungalooo_cache_v1'
+
+  const rowsToItems = (rows) => (rows || []).map((r) => ({ id: r.id, ...r.doc }))
+
+  const readCache = () => {
+    try {
+      return JSON.parse(localStorage.getItem(CACHE_KEY) || '[]')
+    } catch {
+      return []
+    }
+  }
+  const writeCache = (items) => {
+    try {
+      localStorage.setItem(CACHE_KEY, JSON.stringify(items))
+    } catch {
+      /* пренебрегваме */
+    }
+  }
+
+  async function fetchAll() {
+    const { data, error } = await supabase.from(TABLE).select('id, doc')
+    if (error) throw error
+    return rowsToItems(data)
   }
 
   return {
     isCloud: true,
 
     subscribe(cb, onError) {
-      let unsub = () => {}
-      load().then(({ collection, onSnapshot }) => {
-        unsub = onSnapshot(
-          collection(db, COLLECTION),
-          (snap) => {
-            const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }))
-            cb(items, { fromCache: snap.metadata.fromCache })
-          },
-          (err) => onError && onError(err)
-        )
-      })
-      return () => unsub()
+      // 1) Показваме веднага кешираните данни (бързо зареждане + офлайн).
+      const cached = readCache()
+      if (cached.length) Promise.resolve().then(() => cb(cached, { fromCache: true }))
+
+      // 2) Зареждаме актуалните данни.
+      const load = async () => {
+        try {
+          const items = await fetchAll()
+          writeCache(items)
+          cb(items, { fromCache: false })
+        } catch (err) {
+          if (!cached.length) onError && onError(err)
+        }
+      }
+      load()
+
+      // 3) Слушаме за промени в реално време.
+      const channel = supabase
+        .channel('bungalows-changes')
+        .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, load)
+        .subscribe()
+
+      return () => supabase.removeChannel(channel)
     },
 
-    async add(data) {
-      const { collection, addDoc } = await load()
-      const ref = await addDoc(collection(db, COLLECTION), clean(data))
-      return ref.id
+    async add(doc) {
+      const id = newId()
+      const { error } = await supabase.from(TABLE).insert({ id, doc: clean(doc) })
+      if (error) throw error
+      return id
     },
 
     async update(id, patch) {
-      const { doc, updateDoc } = await load()
-      await updateDoc(doc(db, COLLECTION, id), clean(patch))
+      // Сливаме с текущия запис (както при документна база).
+      const { data, error: readErr } = await supabase.from(TABLE).select('doc').eq('id', id).single()
+      if (readErr) throw readErr
+      const merged = { ...(data?.doc || {}), ...patch }
+      const { error } = await supabase.from(TABLE).update({ doc: clean(merged) }).eq('id', id)
+      if (error) throw error
     },
 
-    async set(id, data) {
-      const { doc, setDoc } = await load()
-      await setDoc(doc(db, COLLECTION, id), clean(data))
+    async set(id, doc) {
+      const { error } = await supabase.from(TABLE).upsert({ id, doc: clean(doc) })
+      if (error) throw error
     },
 
     async remove(id) {
-      const { doc, deleteDoc } = await load()
-      await deleteDoc(doc(db, COLLECTION, id))
+      const { error } = await supabase.from(TABLE).delete().eq('id', id)
+      if (error) throw error
     },
 
     async getAllOnce() {
-      const { collection, getDocs } = await load()
-      const snap = await getDocs(collection(db, COLLECTION))
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      return fetchAll()
     },
 
-    // Записва списък наведнъж (за импорт / зареждане на началните данни).
     async bulkAdd(list) {
-      const { collection, writeBatch, doc } = await load()
-      let batch = writeBatch(db)
-      let n = 0
-      for (const item of list) {
-        const { id, ...rest } = item
-        batch.set(doc(collection(db, COLLECTION)), clean(rest))
-        if (++n % 400 === 0) {
-          await batch.commit()
-          batch = writeBatch(db)
-        }
+      const rows = list.map((item) => {
+        const { id, ...doc } = item
+        return { id: newId(), doc: clean(doc) }
+      })
+      // На партиди по 500, за да не са прекалено големи заявките.
+      for (let i = 0; i < rows.length; i += 500) {
+        const { error } = await supabase.from(TABLE).insert(rows.slice(i, i + 500))
+        if (error) throw error
       }
-      await batch.commit()
     },
 
-    // Изтрива всички записи (за възстановяване от резервно копие).
     async clearAll() {
-      const { collection, getDocs, writeBatch } = await load()
-      const snap = await getDocs(collection(db, COLLECTION))
-      let batch = writeBatch(db)
-      let n = 0
-      for (const d of snap.docs) {
-        batch.delete(d.ref)
-        if (++n % 400 === 0) {
-          await batch.commit()
-          batch = writeBatch(db)
-        }
-      }
-      await batch.commit()
+      const { error } = await supabase
+        .from(TABLE)
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000')
+      if (error) throw error
     },
   }
 }
@@ -185,5 +204,5 @@ function makeLocalStore() {
   }
 }
 
-export const store = firebaseEnabled ? makeCloudStore() : makeLocalStore()
+export const store = backendEnabled ? makeCloudStore() : makeLocalStore()
 export const isCloud = store.isCloud

@@ -66,7 +66,7 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks(id) {
             if (id.includes('node_modules')) {
-              if (id.includes('firebase') || id.includes('@firebase')) return 'firebase'
+              if (id.includes('@supabase')) return 'supabase'
               if (id.includes('react-dom') || id.includes('react-router') || id.includes('/react/'))
                 return 'react'
             }

@@ -25,8 +25,8 @@ function DemoBanner() {
     <div className="demo-banner">
       <Icon name="info" size={16} />
       <span>
-        Демо режим — данните се пазят само на този браузър. За синхронизация между устройства
-        добавете Firebase ключове (вижте <strong>README.md</strong>).
+        Демо режим — данните се пазят само на този браузър. За обща синхронизация между
+        устройства свържете базата (вижте <strong>README.md</strong>).
       </span>
       <button className="icon-btn" aria-label="Скрий" onClick={() => { localStorage.setItem('bungalooo_demo_banner', '1'); setDismissed(true) }}>
         <Icon name="close" size={16} />

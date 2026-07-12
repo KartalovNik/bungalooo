@@ -132,7 +132,7 @@ export default function TopNav({ onOpenLogin, onOpenWho }) {
           )}
 
           {!isCloud ? (
-            <span className="chip chip--demo" title="Демо режим — данните са само на това устройство. Добавете Firebase ключове за синхронизация.">
+            <span className="chip chip--demo" title="Демо режим — данните са само на това устройство. Свържете базата за обща синхронизация.">
               Демо
             </span>
           ) : !online ? (
