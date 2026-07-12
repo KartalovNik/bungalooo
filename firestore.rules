@@ -1,0 +1,43 @@
+rules_version = '2';
+
+// ─────────────────────────────────────────────────────────────────
+// Правила за достъп до данните на Bungalooo.
+//
+//  • ЧЕТЕНЕ: разрешено на всички (публичен режим само за разглеждане).
+//  • ПИСАНЕ: разрешено само на влезлия „редакторски" акаунт.
+//
+// Общата парола за редактиране е паролата на този един акаунт.
+// Никаква парола НЕ стои в кода — тя се въвежда във формата за вход и
+// се проверява сигурно от Firebase Authentication.
+//
+// ВАЖНО: Ако смените имейла на редакторския акаунт, сменете го и тук
+// (реда по-долу), и в .env.local (VITE_EDITOR_EMAIL).
+// ─────────────────────────────────────────────────────────────────
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isEditor() {
+      return request.auth != null
+        && request.auth.token.email == 'editor@bungalooo.app';
+    }
+
+    function validBungalow() {
+      // Лека проверка: името трябва да е текст до 200 знака.
+      return request.resource.data.name is string
+        && request.resource.data.name.size() <= 200;
+    }
+
+    match /bungalows/{id} {
+      allow read: if true;
+      allow create: if isEditor() && validBungalow();
+      allow update: if isEditor() && validBungalow();
+      allow delete: if isEditor();
+    }
+
+    // По подразбиране всичко останало е забранено.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
