@@ -12,7 +12,7 @@ import { SORT_OPTIONS, countActiveFilters } from '../utils/filterSort'
 import { APP_NAME } from '../config'
 
 export default function TopNav({ onOpenLogin, onOpenWho }) {
-  const { editMode, currentUser, signOut, isCloud } = useAuth()
+  const { editMode, currentUser, signOut } = useAuth()
   const { query, setQuery, sort, setSort, setFiltersOpen, filters, openAdd, showAll } = useUI()
   const toast = useToast()
   const online = useOnline()
@@ -131,15 +131,11 @@ export default function TopNav({ onOpenLogin, onOpenWho }) {
             </button>
           )}
 
-          {!isCloud ? (
-            <span className="chip chip--demo" title="Демо режим — данните са само на това устройство. Свържете базата за обща синхронизация.">
-              Демо
-            </span>
-          ) : !online ? (
-            <span className="chip chip--offline" title="Няма връзка — виждате запазените данни. Промените ще се синхронизират при връщане на мрежата.">
+          {!online && (
+            <span className="chip chip--offline" title="Няма връзка — виждате запазените данни. Промените ще се появят при връщане на мрежата.">
               <Icon name="cloudOff" size={15} /> Офлайн
             </span>
-          ) : null}
+          )}
         </div>
       </div>
     </header>

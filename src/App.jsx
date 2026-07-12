@@ -16,25 +16,6 @@ import { useAuth } from './context/AuthContext'
 import { useToast } from './context/ToastContext'
 import { filterList, sortList, countActiveFilters } from './utils/filterSort'
 
-function DemoBanner() {
-  const [dismissed, setDismissed] = useState(
-    () => localStorage.getItem('bungalooo_demo_banner') === '1'
-  )
-  if (dismissed) return null
-  return (
-    <div className="demo-banner">
-      <Icon name="info" size={16} />
-      <span>
-        Демо режим — данните се пазят само на този браузър. За обща синхронизация между
-        устройства свържете базата (вижте <strong>README.md</strong>).
-      </span>
-      <button className="icon-btn" aria-label="Скрий" onClick={() => { localStorage.setItem('bungalooo_demo_banner', '1'); setDismissed(true) }}>
-        <Icon name="close" size={16} />
-      </button>
-    </div>
-  )
-}
-
 function List() {
   const { bungalows, loading, error, seedInitial } = useData()
   const { query, filters, sort, clearFilters, openAdd } = useUI()
@@ -107,7 +88,6 @@ function List() {
 }
 
 export default function App() {
-  const { isCloud } = useData()
   const { needsUserPick } = useAuth()
   const [loginOpen, setLoginOpen] = useState(false)
   const [whoOpen, setWhoOpen] = useState(false)
@@ -117,7 +97,6 @@ export default function App() {
       <TopNav onOpenLogin={() => setLoginOpen(true)} onOpenWho={() => setWhoOpen(true)} />
 
       <main className="main">
-        {!isCloud && <DemoBanner />}
         <List />
       </main>
 

@@ -5,11 +5,6 @@
 
 export const APP_NAME = 'Bungalooo'
 
-// Имейл на общия редакторски акаунт (паролата му е общата парола за
-// редактиране). НЕ е таен. Може да се смени през .env.local.
-export const EDITOR_EMAIL =
-  import.meta.env.VITE_EDITOR_EMAIL || 'editor@bungalooo.app'
-
 // ── Хора, които редактират (всеки със свой цвят) ─────────────────
 export const USERS = [
   { id: 'nik', name: 'Ник', color: '#2563eb' },

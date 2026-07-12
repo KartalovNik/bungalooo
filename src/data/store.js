@@ -1,15 +1,16 @@
 // ─────────────────────────────────────────────────────────────────
-// Слой за данните.
-// Има два адаптера зад един и същ интерфейс:
-//   • cloudStore — Supabase (обща синхронизация между устройства)
-//   • localStore — localStorage (ДЕМО режим, само на това устройство)
-// Изборът е автоматичен според наличието на ключове за базата.
+// Слой за данните — върху GitHub (файл data.json в клон „data").
+//   • Четене: публично (за всички). Актуализира се чрез опресняване.
+//   • Запис: през GitHub API с личния код за достъп (виж github.js).
+//   • Записите се нареждат в опашка и се повтарят при едновременна
+//     промяна от друг (конфликт на версии).
+//   • Пази се локален кеш за бързо зареждане и работа офлайн.
 // ─────────────────────────────────────────────────────────────────
-import { backendEnabled, supabase } from '../backend'
+import { getToken, apiRead, rawRead, apiWrite } from '../github'
 
-const TABLE = 'bungalows'
+const CACHE_KEY = 'bungalooo_cache_v1'
+const POLL_MS = 12000
 
-// Прави чисто копие (без undefined стойности).
 function clean(obj) {
   return JSON.parse(JSON.stringify(obj, (_k, v) => (v === undefined ? null : v)))
 }
@@ -19,190 +20,171 @@ export function newId() {
   return 'id-' + Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
-// ── Облачен адаптер (Supabase) ───────────────────────────────────
-function makeCloudStore() {
-  const CACHE_KEY = 'bungalooo_cache_v1'
-
-  const rowsToItems = (rows) => (rows || []).map((r) => ({ id: r.id, ...r.doc }))
-
-  const readCache = () => {
-    try {
-      return JSON.parse(localStorage.getItem(CACHE_KEY) || '[]')
-    } catch {
-      return []
-    }
+function readCache() {
+  try {
+    return JSON.parse(localStorage.getItem(CACHE_KEY) || '[]')
+  } catch {
+    return []
   }
-  const writeCache = (items) => {
-    try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(items))
-    } catch {
-      /* пренебрегваме */
-    }
-  }
-
-  async function fetchAll() {
-    const { data, error } = await supabase.from(TABLE).select('id, doc')
-    if (error) throw error
-    return rowsToItems(data)
-  }
-
-  return {
-    isCloud: true,
-
-    subscribe(cb, onError) {
-      // 1) Показваме веднага кешираните данни (бързо зареждане + офлайн).
-      const cached = readCache()
-      if (cached.length) Promise.resolve().then(() => cb(cached, { fromCache: true }))
-
-      // 2) Зареждаме актуалните данни.
-      const load = async () => {
-        try {
-          const items = await fetchAll()
-          writeCache(items)
-          cb(items, { fromCache: false })
-        } catch (err) {
-          if (!cached.length) onError && onError(err)
-        }
-      }
-      load()
-
-      // 3) Слушаме за промени в реално време.
-      const channel = supabase
-        .channel('bungalows-changes')
-        .on('postgres_changes', { event: '*', schema: 'public', table: TABLE }, load)
-        .subscribe()
-
-      return () => supabase.removeChannel(channel)
-    },
-
-    async add(doc) {
-      const id = newId()
-      const { error } = await supabase.from(TABLE).insert({ id, doc: clean(doc) })
-      if (error) throw error
-      return id
-    },
-
-    async update(id, patch) {
-      // Сливаме с текущия запис (както при документна база).
-      const { data, error: readErr } = await supabase.from(TABLE).select('doc').eq('id', id).single()
-      if (readErr) throw readErr
-      const merged = { ...(data?.doc || {}), ...patch }
-      const { error } = await supabase.from(TABLE).update({ doc: clean(merged) }).eq('id', id)
-      if (error) throw error
-    },
-
-    async set(id, doc) {
-      const { error } = await supabase.from(TABLE).upsert({ id, doc: clean(doc) })
-      if (error) throw error
-    },
-
-    async remove(id) {
-      const { error } = await supabase.from(TABLE).delete().eq('id', id)
-      if (error) throw error
-    },
-
-    async getAllOnce() {
-      return fetchAll()
-    },
-
-    async bulkAdd(list) {
-      const rows = list.map((item) => {
-        const { id, ...doc } = item
-        return { id: newId(), doc: clean(doc) }
-      })
-      // На партиди по 500, за да не са прекалено големи заявките.
-      for (let i = 0; i < rows.length; i += 500) {
-        const { error } = await supabase.from(TABLE).insert(rows.slice(i, i + 500))
-        if (error) throw error
-      }
-    },
-
-    async clearAll() {
-      const { error } = await supabase
-        .from(TABLE)
-        .delete()
-        .neq('id', '00000000-0000-0000-0000-000000000000')
-      if (error) throw error
-    },
+}
+function writeCache(items) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(items))
+  } catch {
+    /* пренебрегваме */
   }
 }
 
-// ── Локален адаптер (localStorage) ───────────────────────────────
-function makeLocalStore() {
-  const KEY = 'bungalooo_data_v1'
-  const listeners = new Set()
+// Състояние
+const listeners = new Set()
+let state = { items: readCache(), sha: null, json: '' }
+let pollTimer = null
+let pollTick = null
+let writeChain = Promise.resolve()
 
-  const read = () => {
-    try {
-      return JSON.parse(localStorage.getItem(KEY) || '[]')
-    } catch {
-      return []
-    }
-  }
-  const write = (items) => {
-    localStorage.setItem(KEY, JSON.stringify(items))
-    listeners.forEach((cb) => cb([...items], { fromCache: false }))
-  }
+function notify(fromCache = false) {
+  listeners.forEach((cb) => cb([...state.items], { fromCache }))
+}
 
-  if (typeof window !== 'undefined') {
-    window.addEventListener('storage', (e) => {
-      if (e.key === KEY) listeners.forEach((cb) => cb(read(), { fromCache: false }))
+async function readCurrent() {
+  const token = getToken()
+  return token ? apiRead(token) : rawRead()
+}
+
+// Зарежда актуалните данни и уведомява, ако има промяна.
+async function refresh() {
+  const { items, sha } = await readCurrent()
+  const json = JSON.stringify(items)
+  if (json !== state.json) {
+    state = { items, sha: sha ?? state.sha, json }
+    writeCache(items)
+    notify(false)
+  } else if (sha && sha !== state.sha) {
+    state.sha = sha
+  }
+}
+
+function startPolling() {
+  if (pollTimer) return
+  pollTick = () => {
+    refresh().catch(() => {
+      /* офлайн / временна грешка — оставаме на кеша */
     })
   }
-
-  return {
-    isCloud: false,
-
-    subscribe(cb) {
-      listeners.add(cb)
-      Promise.resolve().then(() => cb(read(), { fromCache: false }))
-      return () => listeners.delete(cb)
-    },
-
-    async add(data) {
-      const items = read()
-      const id = newId()
-      items.push({ id, ...clean(data) })
-      write(items)
-      return id
-    },
-
-    async update(id, patch) {
-      const items = read().map((it) => (it.id === id ? { ...it, ...clean(patch) } : it))
-      write(items)
-    },
-
-    async set(id, data) {
-      const items = read()
-      const idx = items.findIndex((it) => it.id === id)
-      const next = { id, ...clean(data) }
-      if (idx >= 0) items[idx] = next
-      else items.push(next)
-      write(items)
-    },
-
-    async remove(id) {
-      write(read().filter((it) => it.id !== id))
-    },
-
-    async getAllOnce() {
-      return read()
-    },
-
-    async bulkAdd(list) {
-      const items = read()
-      for (const item of list) {
-        const { id, ...rest } = item
-        items.push({ id: newId(), ...clean(rest) })
-      }
-      write(items)
-    },
-
-    async clearAll() {
-      write([])
-    },
-  }
+  pollTimer = setInterval(pollTick, POLL_MS)
+  window.addEventListener('focus', pollTick)
+  document.addEventListener('visibilitychange', pollTick)
+  window.addEventListener('online', pollTick)
+}
+function stopPolling() {
+  if (!pollTimer) return
+  clearInterval(pollTimer)
+  window.removeEventListener('focus', pollTick)
+  document.removeEventListener('visibilitychange', pollTick)
+  window.removeEventListener('online', pollTick)
+  pollTimer = null
+  pollTick = null
 }
 
-export const store = backendEnabled ? makeCloudStore() : makeLocalStore()
-export const isCloud = store.isCloud
+function friendlyWriteError(status) {
+  if (status === 401) return new Error('Кодът за редактиране е невалиден или изтекъл. Влезте отново.')
+  if (status === 403) return new Error('Кодът няма права за запис в хранилището.')
+  if (status === 404) return new Error('Хранилището/клонът „data" не е намерен.')
+  return new Error(`Записът не бе успешен (GitHub ${status}).`)
+}
+
+// Изпълнява промяна: чете актуалното, прилага mutate(items) → нов списък,
+// записва. При конфликт (друг е записал междувременно) опитва пак.
+function commit(mutate, message) {
+  const run = async () => {
+    const token = getToken()
+    if (!token) throw new Error('Няма код за редактиране. Влезте в режим за редакция.')
+    let attempt = 0
+    for (;;) {
+      const { items, sha } = await apiRead(token)
+      const next = mutate([...items])
+      const res = await apiWrite(token, next, sha, message)
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}))
+        state = { items: next, sha: data?.content?.sha ?? null, json: JSON.stringify(next) }
+        writeCache(next)
+        notify(false)
+        return
+      }
+      if (res.status === 409 && attempt < 5) {
+        attempt++
+        continue // друг е записал — четем наново и опитваме пак
+      }
+      throw friendlyWriteError(res.status)
+    }
+  }
+  writeChain = writeChain.then(run, run)
+  return writeChain
+}
+
+export const isCloud = true
+
+export const store = {
+  isCloud: true,
+
+  subscribe(cb, onError) {
+    listeners.add(cb)
+    // Показваме кеша веднага (бързо + офлайн).
+    if (state.items.length) Promise.resolve().then(() => cb([...state.items], { fromCache: true }))
+    // Първо зареждане.
+    refresh().catch((err) => {
+      if (!state.items.length) onError && onError(err)
+    })
+    startPolling()
+    return () => {
+      listeners.delete(cb)
+      if (listeners.size === 0) stopPolling()
+    }
+  },
+
+  async add(doc) {
+    const id = newId()
+    await commit((items) => [...items, { id, ...clean(doc) }], 'Bungalooo: ново бунгало')
+    return id
+  },
+
+  async update(id, patch) {
+    await commit(
+      (items) => items.map((it) => (it.id === id ? { ...it, ...clean(patch) } : it)),
+      'Bungalooo: промяна'
+    )
+  },
+
+  async set(id, doc) {
+    await commit((items) => {
+      const idx = items.findIndex((it) => it.id === id)
+      const next = { id, ...clean(doc) }
+      if (idx >= 0) items[idx] = next
+      else items.push(next)
+      return items
+    }, 'Bungalooo: запис')
+  },
+
+  async remove(id) {
+    await commit((items) => items.filter((it) => it.id !== id), 'Bungalooo: изтриване')
+  },
+
+  async getAllOnce() {
+    const { items } = await readCurrent()
+    return items
+  },
+
+  async bulkAdd(list) {
+    await commit((items) => {
+      const add = list.map((item) => {
+        const { id, ...doc } = item
+        return { id: newId(), ...clean(doc) }
+      })
+      return [...items, ...add]
+    }, 'Bungalooo: добавяне на записи')
+  },
+
+  async clearAll() {
+    await commit(() => [], 'Bungalooo: изчистване')
+  },
+}

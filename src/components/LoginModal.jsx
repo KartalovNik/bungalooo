@@ -1,4 +1,4 @@
-// Вход в режим за редактиране (само паролата).
+// Вход в режим за редактиране (код за достъп = GitHub token).
 // Изборът „кой си" се прави след това от WhoAmIModal (в App).
 import { useState, useEffect } from 'react'
 import Modal from './Modal'
@@ -6,14 +6,14 @@ import Icon from './Icons'
 import { useAuth } from '../context/AuthContext'
 
 export default function LoginModal({ open, onClose }) {
-  const { signIn, isCloud } = useAuth()
-  const [password, setPassword] = useState('')
+  const { signIn } = useAuth()
+  const [token, setTokenValue] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (open) {
-      setPassword('')
+      setTokenValue('')
       setError('')
       setBusy(false)
     }
@@ -24,9 +24,9 @@ export default function LoginModal({ open, onClose }) {
     setError('')
     setBusy(true)
     try {
-      await signIn(password)
-      setPassword('')
-      onClose() // след успех избора „кой си" се показва автоматично
+      await signIn(token)
+      setTokenValue('')
+      onClose() // след успех изборът „кой си" се показва автоматично
     } catch (err) {
       setError(err.message || 'Входът не бе успешен.')
     } finally {
@@ -38,17 +38,18 @@ export default function LoginModal({ open, onClose }) {
     <Modal open={open} onClose={onClose} title="Вход за редактиране" size="sm">
       <form onSubmit={submit} className="login-form">
         <p className="muted mb">
-          Въведете общата парола за редактиране. В публичния режим всеки може да разглежда, но не и да променя.
+          Въведете общия <strong>код за редактиране</strong>. Работи като парола — въвежда се
+          веднъж на това устройство. В публичния режим всеки може да разглежда, но не и да променя.
         </p>
         <label className="field">
-          <span className="field__label">Парола</span>
+          <span className="field__label">Код за редактиране</span>
           <input
             type="password"
             className="input"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            placeholder="Общата парола"
+            value={token}
+            onChange={(e) => setTokenValue(e.target.value)}
+            autoComplete="off"
+            placeholder="github_pat_… (или ghp_…)"
             autoFocus
           />
         </label>
@@ -57,15 +58,14 @@ export default function LoginModal({ open, onClose }) {
             <Icon name="warning" size={16} /> {error}
           </p>
         )}
-        {!isCloud && (
-          <p className="hint">
-            <Icon name="info" size={15} /> Демо режим (без облак): работи всяка непразна парола. За реална защита свържете базата.
-          </p>
-        )}
+        <p className="hint">
+          <Icon name="info" size={15} /> Кодът се получава веднъж и се споделя между четиримата
+          (както обща парола). Как се създава — виж <strong>README.md</strong>, раздел „Код за редактиране".
+        </p>
         <div className="modal__foot mt">
           <button type="button" className="btn btn--ghost" onClick={onClose}>Отказ</button>
           <button type="submit" className="btn btn--primary" disabled={busy}>
-            {busy ? 'Влизане…' : 'Влез'}
+            {busy ? 'Проверка…' : 'Влез'}
           </button>
         </div>
       </form>
