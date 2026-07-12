@@ -51,9 +51,12 @@ function headers(token) {
   return h
 }
 
-// Чете { items, sha } през API (актуално, за редактори с token).
+// Чете { items, sha } през API (актуално). token може да е null (публично).
 export async function apiRead(token) {
-  const res = await fetch(`${apiBase}?ref=${GH.branch}`, { headers: headers(token) })
+  const res = await fetch(`${apiBase}?ref=${GH.branch}`, {
+    headers: headers(token),
+    cache: 'no-cache',
+  })
   if (res.status === 404) return { items: [], sha: null }
   if (!res.ok) throw new Error(`GitHub четене: ${res.status}`)
   const data = await res.json()

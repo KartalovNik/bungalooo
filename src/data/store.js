@@ -9,7 +9,8 @@
 import { getToken, apiRead, rawRead, apiWrite } from '../github'
 
 const CACHE_KEY = 'bungalooo_cache_v1'
-const POLL_MS = 12000
+const POLL_EDITOR_MS = 12000 // редактори — често (актуален API)
+const POLL_PUBLIC_MS = 60000 // посетители — по-рядко (лимит на GitHub API)
 
 function clean(obj) {
   return JSON.parse(JSON.stringify(obj, (_k, v) => (v === undefined ? null : v)))
@@ -40,6 +41,7 @@ const listeners = new Set()
 let state = { items: readCache(), sha: null, json: '' }
 let pollTimer = null
 let pollTick = null
+let stopped = true
 let writeChain = Promise.resolve()
 
 function notify(fromCache = false) {
@@ -48,7 +50,13 @@ function notify(fromCache = false) {
 
 async function readCurrent() {
   const token = getToken()
-  return token ? apiRead(token) : rawRead()
+  if (token) return apiRead(token)
+  // Посетители: първо свеж API (без вход), при лимит → публичния raw адрес.
+  try {
+    return await apiRead(null)
+  } catch {
+    return rawRead()
+  }
 }
 
 // Зарежда актуалните данни и уведомява, ако има промяна.
@@ -64,26 +72,34 @@ async function refresh() {
   }
 }
 
-function startPolling() {
-  if (pollTimer) return
-  pollTick = () => {
-    refresh().catch(() => {
+function scheduleNext() {
+  const delay = getToken() ? POLL_EDITOR_MS : POLL_PUBLIC_MS
+  pollTimer = setTimeout(async () => {
+    await refresh().catch(() => {
       /* офлайн / временна грешка — оставаме на кеша */
     })
-  }
-  pollTimer = setInterval(pollTick, POLL_MS)
+    if (!stopped) scheduleNext()
+  }, delay)
+}
+function startPolling() {
+  if (!stopped) return
+  stopped = false
+  scheduleNext()
+  pollTick = () => refresh().catch(() => {})
   window.addEventListener('focus', pollTick)
   document.addEventListener('visibilitychange', pollTick)
   window.addEventListener('online', pollTick)
 }
 function stopPolling() {
-  if (!pollTimer) return
-  clearInterval(pollTimer)
-  window.removeEventListener('focus', pollTick)
-  document.removeEventListener('visibilitychange', pollTick)
-  window.removeEventListener('online', pollTick)
+  stopped = true
+  if (pollTimer) clearTimeout(pollTimer)
   pollTimer = null
-  pollTick = null
+  if (pollTick) {
+    window.removeEventListener('focus', pollTick)
+    document.removeEventListener('visibilitychange', pollTick)
+    window.removeEventListener('online', pollTick)
+    pollTick = null
+  }
 }
 
 function friendlyWriteError(status) {
