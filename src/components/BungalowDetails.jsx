@@ -154,6 +154,7 @@ export default function BungalowDetails() {
               ) : (
                 <StatusBadge statusKey={b.status} />
               )}
+              {b.football === true && <span className="football-tag"><span aria-hidden="true">⚽</span> Футболно игрище</span>}
               {b.favorite && <span className="fav-tag"><Icon name="heartFilled" size={14} /> Любимо</span>}
               {b.archived && <span className="chip chip--demo">Архивирано</span>}
             </div>

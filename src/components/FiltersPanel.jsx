@@ -143,6 +143,7 @@ export default function FiltersPanel() {
               {AMENITIES.map((a) => (
                 <Toggle key={a.key} label={a.label} checked={filters[a.key]} onChange={(v) => setFilter(a.key, v)} />
               ))}
+              <Toggle label="⚽ Футболно игрище наблизо" checked={filters.football} onChange={(v) => setFilter('football', v)} />
               <Toggle label="Има свободни места" checked={filters.availableOnly} onChange={(v) => setFilter('availableOnly', v)} />
               <Toggle label="Проверени (с дата на проверка)" checked={filters.verifiedOnly} onChange={(v) => setFilter('verifiedOnly', v)} />
               <Toggle label="С добавена бележка" checked={filters.withNotes} onChange={(v) => setFilter('withNotes', v)} />

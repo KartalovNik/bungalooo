@@ -64,6 +64,11 @@ function BungalowCard({ bungalow: b }) {
         onKeyDown={(e) => { if (e.key === 'Enter') openDetails() }}
         aria-label={`Отвори детайли за ${b.name}`}>
         <Photo src={cover} alt={b.name} className="card__photo" />
+        {b.football === true && (
+          <span className="card__football" title="Футболно игрище наблизо">
+            <span className="card__football-ball" aria-hidden="true">⚽</span> Футбол
+          </span>
+        )}
         {(b.photos || []).filter(Boolean).length > 1 && (
           <span className="card__photo-count"><Icon name="image" size={13} /> {b.photos.filter(Boolean).length}</span>
         )}

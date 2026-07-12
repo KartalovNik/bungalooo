@@ -16,6 +16,7 @@ export const DEFAULT_FILTERS = {
   parking: false,
   kitchen: false,
   kidFriendly: false,
+  football: false,
   availableOnly: false,
   verifiedOnly: false,
   withNotes: false,
@@ -34,7 +35,7 @@ export function countActiveFilters(f) {
   n += f.minCapacity !== '' ? 1 : 0
   n += f.minRating !== '' ? 1 : 0
   for (const k of [
-    'favorite', 'ownBathroom', 'ac', 'parking', 'kitchen', 'kidFriendly',
+    'favorite', 'ownBathroom', 'ac', 'parking', 'kitchen', 'kidFriendly', 'football',
     'availableOnly', 'verifiedOnly', 'withNotes', 'withNextAction',
   ]) {
     if (f[k]) n++
@@ -82,6 +83,7 @@ export function matchesFilters(b, f) {
   if (f.parking && b.parking !== true) return false
   if (f.kitchen && b.kitchen !== true) return false
   if (f.kidFriendly && b.kidFriendly !== true) return false
+  if (f.football && b.football !== true) return false
   if (f.availableOnly && b.availability !== 'yes') return false
   if (f.verifiedOnly && !b.lastCheckedDate) return false
   if (f.withNotes && !(b.notes && b.notes.trim())) return false

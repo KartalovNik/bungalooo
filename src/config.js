@@ -34,7 +34,15 @@ export const STATUSES = [
 export const DEFAULT_STATUS = 'za_proverka'
 
 export function getStatus(key) {
-  return STATUSES.find((s) => s.key === key) || STATUSES[0]
+  if (!key) return STATUSES[0]
+  const found = STATUSES.find((s) => s.key === key)
+  if (found) return found
+  // Свободен (потребителски) статус — показва се с неутрален сив цвят.
+  return { key, label: key, custom: true, icon: '✍️', color: '#64748b', bg: '#eef2f6', fg: '#334155' }
+}
+
+export function isCustomStatus(key) {
+  return !!key && !STATUSES.some((s) => s.key === key)
 }
 
 // Кои статуси се показват в обобщението (в този ред).
@@ -106,6 +114,7 @@ export function emptyBungalow() {
     parking: null,
     kitchen: null,
     kidFriendly: null,
+    football: null,
     rating: null,
     ratingSource: '',
     phone: '',

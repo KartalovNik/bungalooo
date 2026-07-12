@@ -8,7 +8,7 @@ import ConfirmDialog from './ConfirmDialog'
 import { useUI } from '../context/UIContext'
 import { useData } from '../context/DataContext'
 import { useToast } from '../context/ToastContext'
-import { emptyBungalow, STATUSES, CURRENCIES, AREA_SUGGESTIONS, DEFAULT_STATUS } from '../config'
+import { emptyBungalow, STATUSES, CURRENCIES, AREA_SUGGESTIONS, DEFAULT_STATUS, isCustomStatus } from '../config'
 import { validateBungalow, hasErrors } from '../utils/validation'
 import { findPossibleDuplicates } from '../utils/duplicates'
 import { isValidWebUrl } from '../utils/sanitize'
@@ -212,6 +212,7 @@ export default function BungalowForm() {
             <Field label="Статус" htmlFor="f-status">
               <select id="f-status" className="input" value={data.status} onChange={(e) => set({ status: e.target.value })}>
                 {STATUSES.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+                {isCustomStatus(data.status) && <option value={data.status}>{data.status} (свой)</option>}
               </select>
             </Field>
             <Field label="Любимо">
@@ -266,6 +267,7 @@ export default function BungalowForm() {
             <Field label="Паркинг"><TriSelect value={data.parking} onChange={(v) => set({ parking: v })} /></Field>
             <Field label="Кухня / кухненски бокс"><TriSelect value={data.kitchen} onChange={(v) => set({ kitchen: v })} /></Field>
             <Field label="Подходящо за деца"><TriSelect value={data.kidFriendly} onChange={(v) => set({ kidFriendly: v })} /></Field>
+            <Field label="⚽ Футболно игрище наблизо"><TriSelect value={data.football} onChange={(v) => set({ football: v })} /></Field>
           </div>
         </fieldset>
 

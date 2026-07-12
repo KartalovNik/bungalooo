@@ -1,15 +1,26 @@
-// Смяна на статус — изскачащ прозорец с големи бутони (винаги достъпен,
-// и на телефон), който показва и кой последно е сменил статуса.
-import { useState } from 'react'
+// Смяна на статус — изскачащ прозорец с готови статуси + възможност за
+// СВОЙ статус (свободен текст). Показва и кой последно е сменил статуса.
+import { useState, useEffect } from 'react'
 import Modal from './Modal'
 import Icon from './Icons'
 import UserAvatar from './UserAvatar'
-import { STATUSES, getStatus } from '../config'
+import { STATUSES, getStatus, isCustomStatus } from '../config'
 import { relativeTime } from '../utils/format'
 
 export default function StatusPicker({ statusKey, onChange, changedBy }) {
   const [open, setOpen] = useState(false)
+  const [custom, setCustom] = useState('')
   const s = getStatus(statusKey)
+
+  useEffect(() => {
+    if (open) setCustom(isCustomStatus(statusKey) ? statusKey : '')
+  }, [open, statusKey])
+
+  const pick = (key) => { onChange(key); setOpen(false) }
+  const saveCustom = () => {
+    const v = custom.trim()
+    if (v) pick(v)
+  }
 
   return (
     <>
@@ -32,7 +43,7 @@ export default function StatusPicker({ statusKey, onChange, changedBy }) {
               key={st.key}
               className={`status-opt${st.key === statusKey ? ' status-opt--active' : ''}`}
               style={{ background: st.bg, color: st.fg, borderColor: st.color }}
-              onClick={() => { onChange(st.key); setOpen(false) }}
+              onClick={() => pick(st.key)}
             >
               <span className="status-badge__dot" style={{ background: st.color }} aria-hidden="true" />
               <span className="status-opt__icon" aria-hidden="true">{st.icon}</span>
@@ -41,6 +52,27 @@ export default function StatusPicker({ statusKey, onChange, changedBy }) {
             </button>
           ))}
         </div>
+
+        <div className="status-custom">
+          <label className="field__label">✍️ Или напиши свой статус</label>
+          <div className="status-custom__row">
+            <input
+              className="input"
+              value={custom}
+              onChange={(e) => setCustom(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); saveCustom() } }}
+              placeholder="напр. Чакаме снимки, Обади се пак…"
+              maxLength={40}
+            />
+            <button className="btn btn--primary" onClick={saveCustom} disabled={!custom.trim()}>
+              Запази
+            </button>
+          </div>
+          {isCustomStatus(statusKey) && (
+            <p className="hint">Сегашен свой статус: <strong>{statusKey}</strong></p>
+          )}
+        </div>
+
         {changedBy && changedBy.name && (
           <p className="status-changed-note">
             <UserAvatar user={changedBy} size={18} />
